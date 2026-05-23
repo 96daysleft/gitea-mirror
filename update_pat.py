@@ -8,12 +8,12 @@ lives on GitHub and will be re-synced immediately.
 Run with --dry-run to preview which repos would be updated.
 """
 
+import argparse
 import json
 import sys
 import tomllib
-import requests
 
-DRY_RUN = "--dry-run" in sys.argv
+import requests
 
 
 def _load_secrets():
@@ -104,16 +104,19 @@ def remigrate(repo, org_id):
     if r.status_code == 201:
         print(f"  [+] Re-migrated: {owner}/{name}")
         return True
-    else:
-        print(f"  [!] Re-migrate failed for {owner}/{name}: {r.status_code} {r.text}", file=sys.stderr)
-        return False
+
+    print(
+        f"  [!] Re-migrate failed for {owner}/{name}: {r.status_code} {r.text}",
+        file=sys.stderr,
+    )
+    return False
 
 
-def update_repo(repo, org_id):
+def update_repo(repo, org_id, dry_run=False):
     owner = repo["owner"]["login"]
     name = repo["name"]
 
-    if DRY_RUN:
+    if dry_run:
         print(f"  [dry] Would update: {owner}/{name}  ({repo.get('original_url')})")
         return
 
@@ -122,8 +125,8 @@ def update_repo(repo, org_id):
     remigrate(repo, org_id)
 
 
-def main():
-    if DRY_RUN:
+def main(dry_run=False):
+    if dry_run:
         print("--- DRY RUN ---")
 
     print(f"Fetching mirrored repos from org: {GITEA_ORG}")
@@ -132,10 +135,21 @@ def main():
     print(f"  Found {len(repos)} mirror repo(s)\n")
 
     for repo in repos:
-        update_repo(repo, org_id)
+        update_repo(repo, org_id, dry_run=dry_run)
 
     print("\nDone.")
 
 
+def _parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Rotate GitHub PAT for mirrored repos")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview repos that would be updated without making changes",
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    main()
+    args = _parse_args()
+    main(dry_run=args.dry_run)

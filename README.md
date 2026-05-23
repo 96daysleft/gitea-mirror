@@ -43,17 +43,23 @@ Create a `secret.json` file in the project root:
 
 **Sync missing repos from GitHub to Gitea:**
 ```bash
-python mirror_sync.py
+python main.py sync
 ```
 
 **Update the GitHub PAT on all mirror repos:**
 ```bash
-python update_pat.py
+python main.py update-pat
 ```
 
 **Dry run (preview only):**
 ```bash
-python update_pat.py --dry-run
+python main.py update-pat --dry-run
+```
+
+**If installed as a package, use the console script:**
+```bash
+mirror-sync sync
+mirror-sync update-pat --dry-run
 ```
 
 ## Deactivate the virtual environment
