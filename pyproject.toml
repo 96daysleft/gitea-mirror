@@ -1,0 +1,17 @@
+[project]
+name = "gitea-mirror"
+version = "0.1.0"
+description = "Sync GitHub org repos to Gitea as mirrors"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.31.0",
+]
+
+[project.scripts]
+mirror-sync = "mirror_sync:main"
+
+[tool.mirror_sync]
+github_org = "96daysleft"
+gitea_url = "https://gitea.localfloof.com/"
+gitea_org = "96daysleft"
+mirror_interval = "8h"
