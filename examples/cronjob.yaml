@@ -1,0 +1,31 @@
+# Example: run the mirror sync every hour on Kubernetes.
+# Create the secret first (or generate it with External Secrets / OpenBao):
+#   kubectl create secret generic gitea-mirror \
+#     --from-literal=GITHUB_TOKEN=... --from-literal=GITEA_TOKEN=...
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gitea-mirror
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: sync
+              image: ghcr.io/96daysleft/gitea-mirror:latest
+              args: ["sync"]
+              env:
+                - name: GITHUB_ORG
+                  value: your-github-org
+                - name: GITEA_URL
+                  value: https://gitea.example.com
+                - name: GITEA_ORG
+                  value: your-gitea-org
+              envFrom:
+                - secretRef:
+                    name: gitea-mirror

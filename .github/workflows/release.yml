@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  get-build-data:
+    runs-on: ubuntu-latest
+    outputs:
+      python-image: ${{ steps.python-version.outputs.image }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: python-version
+        run: |
+          version=$(cat .python-version)
+          echo "image=python:${version}-slim" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    needs: get-build-data
+    uses: 96daysleft/github-workflows/.github/workflows/docker-build-push.yml@release
+    permissions:
+      contents: write      # attach assets to the release
+      packages: write      # push to ghcr.io
+      attestations: write  # build provenance attestations
+      id-token: write      # OIDC token for attestation signing
+    with:
+      registry: ghcr.io
+      image-name: ${{ github.repository }}
+      context: .
+      build-args: |
+        PYTHON_IMAGE=${{ needs.get-build-data.outputs.python-image }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}

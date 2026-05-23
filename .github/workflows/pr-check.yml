@@ -1,0 +1,23 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write
+  issues: write
+  pull-requests: write
+  contents: write
+
+jobs:
+  pr-check:
+    uses: 96daysleft/github-workflows/.github/workflows/python-pr-check.yml@release
+    with: 
+      pytest-args: "-q"
+      run-pr-agent:  true
+    secrets:
+      FEDERATION_RULE_ID: ${{ secrets.FEDERATION_RULE_ID }}
+      ORGANIZATION_ID: ${{ secrets.ORGANIZATION_ID }}
+      SERVICE_ACCOUNT_ID: ${{ secrets.SERVICE_ACCOUNT_ID }}
+      WORKSPACE_ID: ${{ secrets.WORKSPACE_ID }}

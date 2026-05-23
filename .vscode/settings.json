@@ -1,0 +1,4 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/gitea-mirror-venv/bin/python",
+    "python.terminal.activateEnvironment": true
+}
