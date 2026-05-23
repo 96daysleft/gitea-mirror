@@ -1,5 +1,5 @@
 secret.json
+gitea-mirror-venv/
 __pycache__/
 *.pyc
-gitea-mirror-venv
-*.pem
+.git/

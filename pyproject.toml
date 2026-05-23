@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [project.scripts]
-mirror-sync = "mirror_sync:main"
+mirror-sync = "main:main"
 
 [tool.mirror_sync]
 github_org = "96daysleft"
