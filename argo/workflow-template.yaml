@@ -4,6 +4,8 @@ metadata:
   name: gitea-mirror
   namespace: argo
 spec:
+  imagePullSecrets:
+    - name: ghcr-pull-secret
   templates:
     - name: sync
       container:
