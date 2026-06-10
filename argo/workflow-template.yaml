@@ -7,7 +7,7 @@ spec:
   templates:
     - name: sync
       container:
-        image: gitea.localfloof.com/96daysleft/gitea-mirror:latest
+        image: ghcr.io/96daysleft/gitea-mirror:latest
         command: ["python", "main.py"]
         args: ["sync"]
         env:
@@ -32,7 +32,7 @@ spec:
 
     - name: update-pat
       container:
-        image: gitea.localfloof.com/96daysleft/gitea-mirror:latest
+        image: ghcr.io/96daysleft/gitea-mirror:latest
         command: ["python", "main.py"]
         args: ["update-pat"]
         env:
