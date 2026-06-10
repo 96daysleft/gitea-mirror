@@ -2,12 +2,17 @@
 """Sync GitHub org repos to Gitea as mirrors."""
 
 import json
+import os
 import sys
 import tomllib
 import requests
 
 
 def _load_secrets():
+    github_token = os.environ.get("GITHUB_TOKEN")
+    gitea_token = os.environ.get("GITEA_TOKEN")
+    if github_token and gitea_token:
+        return {"github_token": github_token, "gitea_token": gitea_token}
     with open("secret.json") as f:
         return json.load(f)
 
@@ -19,6 +24,16 @@ def _load_config():
             cfg = tomllib.load(f).get("tool", {}).get("mirror_sync", {})
     except FileNotFoundError:
         pass
+    env_overrides = {
+        "github_org": "GITHUB_ORG",
+        "gitea_url": "GITEA_URL",
+        "gitea_org": "GITEA_ORG",
+        "mirror_interval": "MIRROR_INTERVAL",
+    }
+    for key, env_var in env_overrides.items():
+        val = os.environ.get(env_var)
+        if val:
+            cfg[key] = val
     return cfg
 
 

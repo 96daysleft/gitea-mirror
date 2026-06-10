@@ -1,0 +1,19 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-push:
+    uses: 96daysleft/github-workflows/.github/workflows/docker-build-push.yml@release
+    permissions:
+      contents: write      # attach assets to the release
+      packages: write      # push to ghcr.io
+    with:
+      registry: ghcr.io
+      image-name: ${{ github.repository }}
+      context: .
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
