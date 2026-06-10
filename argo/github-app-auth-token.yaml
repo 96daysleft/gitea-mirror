@@ -1,0 +1,14 @@
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: GithubAccessToken
+metadata:
+  name: github-app-auth-token
+spec:
+  appID: "Iv23li3MnuBOaHCJFw0p"
+  installID: "139414814"
+  url: "https://api.github.com"
+  auth:
+    privateKey:
+      secretRef:
+        name: github-app-pem
+        key: key
