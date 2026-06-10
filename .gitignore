@@ -2,3 +2,4 @@ secret.json
 __pycache__/
 *.pyc
 gitea-mirror-venv
+*.pem
