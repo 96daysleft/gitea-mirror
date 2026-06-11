@@ -16,8 +16,8 @@ spec:
           - name: GITHUB_TOKEN
             valueFrom:
               secretKeyRef:
-                name: gitea-mirror-secrets
-                key: github_token
+                name: gitea-mirror-github-app-token
+                key: token
           - name: GITEA_TOKEN
             valueFrom:
               secretKeyRef:
@@ -41,8 +41,8 @@ spec:
           - name: GITHUB_TOKEN
             valueFrom:
               secretKeyRef:
-                name: gitea-mirror-secrets
-                key: github_token
+                name: gitea-mirror-github-app-token
+                key: token
           - name: GITEA_TOKEN
             valueFrom:
               secretKeyRef:
