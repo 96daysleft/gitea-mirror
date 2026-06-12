@@ -10,9 +10,6 @@ spec:
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   workflowSpec:
-    entrypoint: sync
-    templates:
-      - name: sync
-        templateRef:
-          name: gitea-mirror
-          template: sync
+    workflowTemplateRef:
+      name: gitea-mirror
+      template: sync
