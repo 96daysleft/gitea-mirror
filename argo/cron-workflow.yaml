@@ -9,8 +9,7 @@ spec:
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
-  entrypoint: sync
   workflowSpec:
+    entrypoint: sync
     workflowTemplateRef:
       name: gitea-mirror
-      template: sync
