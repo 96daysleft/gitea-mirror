@@ -1,71 +1,40 @@
 #!/usr/bin/env python3
 """Sync GitHub org repos to Gitea as mirrors."""
 
-import json
-import os
 import sys
-import tomllib
+
 import requests
 
+from config import ConfigError, Settings, load_settings
 
-def _load_secrets():
-    github_token = os.environ.get("GITHUB_TOKEN")
-    gitea_token = os.environ.get("GITEA_TOKEN")
-    if github_token and gitea_token:
-        return {"github_token": github_token, "gitea_token": gitea_token}
-    with open("secret.json") as f:
-        return json.load(f)
+TIMEOUT = 30
 
 
-def _load_config():
-    cfg = {}
-    try:
-        with open("pyproject.toml", "rb") as f:
-            cfg = tomllib.load(f).get("tool", {}).get("mirror_sync", {})
-    except FileNotFoundError:
-        pass
-    env_overrides = {
-        "github_org": "GITHUB_ORG",
-        "gitea_url": "GITEA_URL",
-        "gitea_org": "GITEA_ORG",
-        "mirror_interval": "MIRROR_INTERVAL",
+def github_headers(s: Settings):
+    return {
+        "Authorization": f"token {s.github_token}",
+        "Accept": "application/vnd.github+json",
     }
-    for key, env_var in env_overrides.items():
-        val = os.environ.get(env_var)
-        if val:
-            cfg[key] = val
-    return cfg
 
 
-_secrets = _load_secrets()
-_cfg = _load_config()
-
-GITHUB_TOKEN = _secrets["github_token"]
-GITHUB_ORG = _cfg["github_org"]
-GITEA_URL = _cfg["gitea_url"].rstrip("/")
-GITEA_TOKEN = _secrets["gitea_token"]
-GITEA_ORG = _cfg.get("gitea_org")
-GITEA_UID = int(_cfg["gitea_uid"]) if "gitea_uid" in _cfg else None
-MIRROR_INTERVAL = _cfg.get("mirror_interval", "8h")
-
-GITHUB_HEADERS = {
-    "Authorization": f"token {GITHUB_TOKEN}",
-    "Accept": "application/vnd.github+json",
-}
-GITEA_HEADERS = {
-    "Authorization": f"token {GITEA_TOKEN}",
-    "Content-Type": "application/json",
-}
+def gitea_headers(s: Settings):
+    return {
+        "Authorization": f"token {s.gitea_token}",
+        "Content-Type": "application/json",
+    }
 
 
-def get_github_repos():
+def get_github_repos(s: Settings):
+    # Note: /users/{name}/repos only lists public repos.
+    kind = "orgs" if s.github_owner_type == "org" else "users"
     repos = []
     page = 1
     while True:
         r = requests.get(
-            f"https://api.github.com/orgs/{GITHUB_ORG}/repos",
-            headers=GITHUB_HEADERS,
+            f"https://api.github.com/{kind}/{s.github_org}/repos",
+            headers=github_headers(s),
             params={"per_page": 100, "page": page},
+            timeout=TIMEOUT,
         )
         r.raise_for_status()
         batch = r.json()
@@ -76,14 +45,15 @@ def get_github_repos():
     return repos
 
 
-def get_gitea_repos():
+def get_gitea_repos(s: Settings):
     repos = set()
     page = 1
     while True:
         r = requests.get(
-            f"{GITEA_URL}/api/v1/repos/search",
-            headers=GITEA_HEADERS,
+            f"{s.gitea_url}/api/v1/repos/search",
+            headers=gitea_headers(s),
             params={"limit": 50, "page": page},
+            timeout=TIMEOUT,
         )
         r.raise_for_status()
         data = r.json()
@@ -95,29 +65,30 @@ def get_gitea_repos():
     return repos
 
 
-def migrate_repo(repo):
+def migrate_repo(s: Settings, repo):
     payload = {
         "clone_addr": repo["clone_url"],
-        "auth_token": GITHUB_TOKEN,
+        "auth_token": s.github_token,
         "repo_name": repo["name"],
         "description": repo.get("description") or "",
         "private": repo["private"],
         "mirror": True,
-        "mirror_interval": MIRROR_INTERVAL,
+        "mirror_interval": s.mirror_interval,
     }
 
-    if GITEA_ORG:
-        payload["repo_owner"] = GITEA_ORG
-    elif GITEA_UID is not None:
-        payload["uid"] = GITEA_UID
+    if s.gitea_org:
+        payload["repo_owner"] = s.gitea_org
+    elif s.gitea_uid is not None:
+        payload["uid"] = s.gitea_uid
     else:
         print("  [!] Missing target owner: set gitea_org or gitea_uid", file=sys.stderr)
         return
 
     r = requests.post(
-        f"{GITEA_URL}/api/v1/repos/migrate",
-        headers=GITEA_HEADERS,
+        f"{s.gitea_url}/api/v1/repos/migrate",
+        headers=gitea_headers(s),
         json=payload,
+        timeout=TIMEOUT,
     )
     if r.status_code == 201:
         print(f"  [+] Migrated: {repo['name']}")
@@ -127,13 +98,21 @@ def migrate_repo(repo):
         print(f"  [!] Failed {repo['name']}: {r.status_code} {r.text}", file=sys.stderr)
 
 
-def main():
-    print(f"Fetching repos from GitHub org: {GITHUB_ORG}")
-    github_repos = get_github_repos()
+def main(settings: Settings | None = None):
+    """Run the sync. `settings` is for test injection; the CLI always passes None
+    and lets this load settings itself, since only one subcommand runs per process."""
+    if settings is None:
+        try:
+            settings = load_settings(need_github_org=True)
+        except ConfigError as e:
+            raise SystemExit(str(e))
+
+    print(f"Fetching repos from GitHub {settings.github_owner_type}: {settings.github_org}")
+    github_repos = get_github_repos(settings)
     print(f"  Found {len(github_repos)} repos on GitHub")
 
-    print(f"Fetching existing repos from Gitea: {GITEA_URL}")
-    gitea_repos = get_gitea_repos()
+    print(f"Fetching existing repos from Gitea: {settings.gitea_url}")
+    gitea_repos = get_gitea_repos(settings)
     print(f"  Found {len(gitea_repos)} repos on Gitea")
 
     missing = [r for r in github_repos if r["name"] not in gitea_repos]
@@ -141,7 +120,7 @@ def main():
 
     for repo in missing:
         print(f"Missing repo {repo.get('name')}")
-        migrate_repo(repo)
+        migrate_repo(settings, repo)
 
     print("\nDone.")
 

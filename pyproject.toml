@@ -1,17 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "gitea-mirror"
 version = "0.1.0"
 description = "Sync GitHub org repos to Gitea as mirrors"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
+license = "MIT"
 dependencies = [
     "requests>=2.31.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
 [project.scripts]
-mirror-sync = "main:main"
+mirror-sync = "cli:main"
 
 [tool.mirror_sync]
-github_org = "96daysleft"
-gitea_url = "https://gitea.localfloof.com/"
-gitea_org = "96daysleft"
+github_org = "your-github-org"
+gitea_url = "https://gitea.example.com/"
+gitea_org = "your-gitea-org"
 mirror_interval = "8h"
+
+[tool.setuptools]
+py-modules = ["main", "cli", "config", "mirror_sync", "update_pat"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

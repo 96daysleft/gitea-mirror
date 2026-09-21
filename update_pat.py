@@ -9,71 +9,41 @@ Run with --dry-run to preview which repos would be updated.
 """
 
 import argparse
-import json
-import os
 import sys
-import tomllib
 
 import requests
 
+from config import ConfigError, Settings, load_settings
 
-def _load_secrets():
-    github_token = os.environ.get("GITHUB_TOKEN")
-    gitea_token = os.environ.get("GITEA_TOKEN")
-    if github_token and gitea_token:
-        return {"github_token": github_token, "gitea_token": gitea_token}
-    with open("secret.json") as f:
-        return json.load(f)
+TIMEOUT = 30
 
 
-def _load_config():
-    cfg = {}
-    try:
-        with open("pyproject.toml", "rb") as f:
-            cfg = tomllib.load(f).get("tool", {}).get("mirror_sync", {})
-    except FileNotFoundError:
-        pass
-    env_overrides = {
-        "gitea_url": "GITEA_URL",
-        "gitea_org": "GITEA_ORG",
-        "mirror_interval": "MIRROR_INTERVAL",
+def gitea_headers(s: Settings):
+    return {
+        "Authorization": f"token {s.gitea_token}",
+        "Content-Type": "application/json",
     }
-    for key, env_var in env_overrides.items():
-        val = os.environ.get(env_var)
-        if val:
-            cfg[key] = val
-    return cfg
 
 
-_secrets = _load_secrets()
-_cfg = _load_config()
-
-GITHUB_TOKEN = _secrets["github_token"]
-GITEA_URL = _cfg["gitea_url"].rstrip("/")
-GITEA_TOKEN = _secrets["gitea_token"]
-GITEA_ORG = _cfg["gitea_org"]
-MIRROR_INTERVAL = _cfg.get("mirror_interval", "8h")
-
-GITEA_HEADERS = {
-    "Authorization": f"token {GITEA_TOKEN}",
-    "Content-Type": "application/json",
-}
-
-
-def get_org_id():
-    r = requests.get(f"{GITEA_URL}/api/v1/orgs/{GITEA_ORG}", headers=GITEA_HEADERS)
+def get_org_id(s: Settings):
+    r = requests.get(
+        f"{s.gitea_url}/api/v1/orgs/{s.gitea_org}",
+        headers=gitea_headers(s),
+        timeout=TIMEOUT,
+    )
     r.raise_for_status()
     return r.json()["id"]
 
 
-def get_mirrored_repos():
+def get_mirrored_repos(s: Settings):
     repos = []
     page = 1
     while True:
         r = requests.get(
-            f"{GITEA_URL}/api/v1/org/{GITEA_ORG}/repos",
-            headers=GITEA_HEADERS,
+            f"{s.gitea_url}/api/v1/org/{s.gitea_org}/repos",
+            headers=gitea_headers(s),
             params={"limit": 50, "page": page},
+            timeout=TIMEOUT,
         )
         r.raise_for_status()
         batch = r.json()
@@ -84,15 +54,16 @@ def get_mirrored_repos():
     return repos
 
 
-def delete_repo(owner, name):
+def delete_repo(s: Settings, owner, name):
     r = requests.delete(
-        f"{GITEA_URL}/api/v1/repos/{owner}/{name}",
-        headers=GITEA_HEADERS,
+        f"{s.gitea_url}/api/v1/repos/{owner}/{name}",
+        headers=gitea_headers(s),
+        timeout=TIMEOUT,
     )
     r.raise_for_status()
 
 
-def remigrate(repo, org_id):
+def remigrate(s: Settings, repo):
     owner = repo["owner"]["login"]
     name = repo["name"]
     original_url = repo.get("original_url", "")
@@ -103,19 +74,20 @@ def remigrate(repo, org_id):
 
     payload = {
         "clone_addr": original_url,
-        "auth_token": GITHUB_TOKEN,
-        "repo_owner": GITEA_ORG,
+        "auth_token": s.github_token,
+        "repo_owner": s.gitea_org,
         "repo_name": name,
         "description": repo.get("description") or "",
         "private": repo["private"],
         "mirror": True,
-        "mirror_interval": MIRROR_INTERVAL,
+        "mirror_interval": s.mirror_interval,
     }
 
     r = requests.post(
-        f"{GITEA_URL}/api/v1/repos/migrate",
-        headers=GITEA_HEADERS,
+        f"{s.gitea_url}/api/v1/repos/migrate",
+        headers=gitea_headers(s),
         json=payload,
+        timeout=TIMEOUT,
     )
     if r.status_code == 201:
         print(f"  [+] Re-migrated: {owner}/{name}")
@@ -128,7 +100,7 @@ def remigrate(repo, org_id):
     return False
 
 
-def update_repo(repo, org_id, dry_run=False):
+def update_repo(s: Settings, repo, dry_run=False):
     owner = repo["owner"]["login"]
     name = repo["name"]
 
@@ -137,21 +109,29 @@ def update_repo(repo, org_id, dry_run=False):
         return
 
     print(f"  Updating {owner}/{name} ...")
-    delete_repo(owner, name)
-    remigrate(repo, org_id)
+    delete_repo(s, owner, name)
+    remigrate(s, repo)
 
 
-def main(dry_run=False):
+def main(dry_run=False, settings: Settings | None = None):
+    """Run the PAT rotation. `settings` is for test injection; the CLI always
+    passes None and lets this load settings itself."""
+    if settings is None:
+        try:
+            settings = load_settings(need_github_org=False, need_gitea_org=True)
+        except ConfigError as e:
+            raise SystemExit(str(e))
+
     if dry_run:
         print("--- DRY RUN ---")
 
-    print(f"Fetching mirrored repos from org: {GITEA_ORG}")
-    org_id = get_org_id()
-    repos = get_mirrored_repos()
+    print(f"Fetching mirrored repos from org: {settings.gitea_org}")
+    get_org_id(settings)  # fail early if the org doesn't exist
+    repos = get_mirrored_repos(settings)
     print(f"  Found {len(repos)} mirror repo(s)\n")
 
     for repo in repos:
-        update_repo(repo, org_id, dry_run=dry_run)
+        update_repo(settings, repo, dry_run=dry_run)
 
     print("\nDone.")
 
